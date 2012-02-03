@@ -13,8 +13,8 @@ vmap dec_viterbi ./dec_viterbi
 vcom -work dec_viterbi ../packages/pkg_helper.vhd
 vcom -work dec_viterbi ../packages/pkg_param.vhd
 vcom -work dec_viterbi ../packages/pkg_param_derived.vhd
-vcom -work dec_viterbi ../packages/pkg_components.vhd
 vcom -work dec_viterbi ../packages/pkg_types.vhd
+vcom -work dec_viterbi ../packages/pkg_components.vhd
 vcom -work dec_viterbi ../packages/pkg_trellis.vhd
 vcom -work dec_viterbi ../src/generic_sp_ram.vhd
 vcom -work dec_viterbi ../src/branch_distance.vhd

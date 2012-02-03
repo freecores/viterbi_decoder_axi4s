@@ -53,9 +53,9 @@ package pkg_trellis is
 	--
 	function calc_initialize      return t_node_s;
 
-	constant PREVIOUS_STATES    : t_previous_states := calc_previous_states;
-	constant TRANSITIONS        : t_transitions     := calc_transitions;
-	constant INITIALIZE_TRELLIS : t_node_s          := calc_initialize;
+	constant PREVIOUS_STATES    : t_previous_states;
+	constant TRANSITIONS        : t_transitions;
+	constant INITIALIZE_TRELLIS : t_node_s;
 
 end package pkg_trellis;
 
@@ -176,5 +176,10 @@ package body pkg_trellis is
 		end loop;
 	return v_initialize;
 	end function calc_initialize;
+
+
+	constant PREVIOUS_STATES    : t_previous_states := calc_previous_states;
+	constant TRANSITIONS        : t_transitions     := calc_transitions;
+	constant INITIALIZE_TRELLIS : t_node_s          := calc_initialize;
 
 end package body pkg_trellis;

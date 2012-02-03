@@ -30,7 +30,7 @@ entity tb_dec_viterbi is
 
 		BLOCK_LENGTH_START : natural := 200;     -- First block length to simulate.
 		BLOCK_LENGTH_END   : natural := 300;     -- Last block length to simulate.
-		BLOCK_LENGTH_INCR  : integer := 20;       -- Increment from one block length to another.
+		BLOCK_LENGTH_INCR  : integer := 100;       -- Increment from one block length to another.
 
 		SIM_ALL_BLOCKS     : boolean := true;  -- Set to true in order to simulate all blocks within a data file.
 		SIM_BLOCK_START    : natural := 396;      -- If SIM_ALL_BLOCKS = false, gives block to start simulation with.

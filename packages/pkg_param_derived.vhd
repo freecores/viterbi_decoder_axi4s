@@ -28,19 +28,19 @@ package pkg_param_derived is
 	function calc_constraint_length return natural;
 
 	-- Memory depth of the encoder shift register.
-	constant ENCODER_MEMORY_DEPTH : natural := calc_constraint_length - 1;
+	constant ENCODER_MEMORY_DEPTH : natural;
 
 	-- Number of trellis states corresponds to the nubmer of ACS units.
-	constant NUMBER_TRELLIS_STATES : natural := 2 ** ENCODER_MEMORY_DEPTH;
+	constant NUMBER_TRELLIS_STATES : natural;
 
 	-- Number of branch units for a single polynomial set
-	constant NUMBER_BRANCH_UNITS : natural := 2 ** NUMBER_PARITY_BITS;
+	constant NUMBER_BRANCH_UNITS : natural;
 
 	-- Bitwidth constants are needed for type conversions
-	constant BW_TRELLIS_STATES    : natural := no_bits_natural(NUMBER_TRELLIS_STATES - 1);
-	constant BW_MAX_WINDOW_LENGTH : natural := no_bits_natural(MAX_WINDOW_LENGTH - 1);
-	constant BW_BRANCH_RESULT     : natural := no_bits_natural((2 ** (BW_LLR_INPUT - 1)) * NUMBER_PARITY_BITS) + 1;
-	constant BW_MAX_PROBABILITY   : natural := no_bits_natural(((2 ** (BW_LLR_INPUT - 1)) * NUMBER_PARITY_BITS) * 4 * ENCODER_MEMORY_DEPTH);
+	constant BW_TRELLIS_STATES    : natural;
+	constant BW_MAX_WINDOW_LENGTH : natural;
+	constant BW_BRANCH_RESULT     : natural;
+	constant BW_MAX_PROBABILITY   : natural;
 
 end package pkg_param_derived;
 
@@ -59,4 +59,15 @@ package body pkg_param_derived is
 		return v_maximum;
 	end function calc_constraint_length;
 
+
+	constant ENCODER_MEMORY_DEPTH : natural := calc_constraint_length - 1;
+
+	constant NUMBER_TRELLIS_STATES : natural := 2 ** ENCODER_MEMORY_DEPTH;
+
+	constant NUMBER_BRANCH_UNITS : natural := 2 ** NUMBER_PARITY_BITS;
+
+	constant BW_TRELLIS_STATES    : natural := no_bits_natural(NUMBER_TRELLIS_STATES - 1);
+	constant BW_MAX_WINDOW_LENGTH : natural := no_bits_natural(MAX_WINDOW_LENGTH - 1);
+	constant BW_BRANCH_RESULT     : natural := no_bits_natural((2 ** (BW_LLR_INPUT - 1)) * NUMBER_PARITY_BITS) + 1;
+	constant BW_MAX_PROBABILITY   : natural := no_bits_natural(((2 ** (BW_LLR_INPUT - 1)) * NUMBER_PARITY_BITS) * 4 * ENCODER_MEMORY_DEPTH);
 end package body pkg_param_derived;
