@@ -39,7 +39,7 @@ entity tb_dec_viterbi is
 		WINDOW_LENGTH      : natural := 55;     -- Window length to use for simulation.
 		ACQUISITION_LENGTH : natural := 50;     -- Acquisition length to use for simulation.
 
-		DATA_DIRECTORY     : string  := "../testbench/" -- Path to testbench data, relative to simulation directory.
+		DATA_DIRECTORY     : string  := "../testbench/WiFi_121_91/" -- Path to testbench data, relative to simulation directory.
 	);
 end entity tb_dec_viterbi;
 
