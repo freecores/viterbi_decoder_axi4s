@@ -1,5 +1,5 @@
 --!
---! Copyright (C) 2011 - 2012 Creonic GmbH
+--! Copyright (C) 2011 - 2014 Creonic GmbH
 --!
 --! This file is part of the Creonic Viterbi Decoder, which is distributed
 --! under the terms of the GNU General Public License version 2.
@@ -52,7 +52,7 @@ end entity reorder;
 
 architecture rtl of reorder is
 
-	-- used to store one reversed output of an traceback unit
+	-- used to store one reversed output of a traceback unit
 	signal buffer_sreg              : unsigned(MAX_WINDOW_LENGTH - 1 downto 0);
 	signal buffer_cnt               : unsigned(BW_MAX_WINDOW_LENGTH - 1 downto 0);
 	signal buffer_end               : integer range ENCODER_MEMORY_DEPTH downto 0;
@@ -66,14 +66,15 @@ begin
 	s_axis_input_tready_int <= '1' when not(send_output) else
 	                           '0';
 
-	m_axis_output_tvalid     <= '1' when send_output and m_axis_output_tready= '1' else
+-- 	m_axis_output_tvalid     <= '1' when send_output and m_axis_output_tready= '1' else
+	m_axis_output_tvalid     <= '1' when send_output else
 	                            '0';
 	m_axis_output_tdata      <= buffer_sreg(0);
 
 	m_axis_output_tlast      <= '1' when buffer_cnt = ENCODER_MEMORY_DEPTH  and last_window else
 	                            '0';
 
-	-- Reorder the global path given from an tracebackunit with the help of an shift register.
+	-- Reorder the global path given from an traceback unit with the help of a shift register.
 	pr_reorder : process(clk) is
 	begin
 	if rising_edge(clk) then

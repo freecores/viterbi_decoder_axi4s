@@ -1,5 +1,5 @@
 --!
---! Copyright (C) 2011 - 2012 Creonic GmbH
+--! Copyright (C) 2011 - 2014 Creonic GmbH
 --!
 --! This file is part of the Creonic Viterbi Decoder, which is distributed
 --! under the terms of the GNU General Public License version 2.
@@ -89,6 +89,7 @@ begin
 			m_axis_outdec_tvalid_int <= '0';
 			m_axis_outdec_tdata      <= '0';
 			m_axis_outdec_tlast      <= '0';
+			m_axis_outprob_tvalid    <= '0';
 			s_axis_inprev_tready     <= '0';
 			s_axis_inbranch_tlast_d  <= '0';
 			m_axis_outprob_tdata     <= std_logic_vector(INITIALIZE_VALUE);
@@ -97,7 +98,10 @@ begin
 			if s_axis_inbranch_tlast_d = '1' then
 				m_axis_outprob_tdata     <= std_logic_vector(INITIALIZE_VALUE);
 				s_axis_inbranch_tlast_d  <= '0';
-				m_axis_outdec_tvalid_int <= '0'; 
+				m_axis_outdec_tvalid_int <= '0';
+			end if;
+			if m_axis_outdec_tvalid_int = '1' and m_axis_outdec_tready = '1' then
+				m_axis_outdec_tvalid_int <= '0';
 			end if;
 
 			-- Process only if we receive valid data.
@@ -119,7 +123,7 @@ begin
 					m_axis_outdec_tdata  <= '0';
 					m_axis_outprob_tdata <= std_logic_vector(v_low);
 				end if;
-				m_axis_outdec_tvalid_int <= s_axis_inbranch_tvalid;
+				m_axis_outdec_tvalid_int <= '1';
 			end if;
 
 			m_axis_outdec_tlast    <= s_axis_inbranch_tlast;

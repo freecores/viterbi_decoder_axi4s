@@ -1,5 +1,5 @@
 --!
---! Copyright (C) 2011 - 2012 Creonic GmbH
+--! Copyright (C) 2011 - 2014 Creonic GmbH
 --!
 --! This file is part of the Creonic Viterbi Decoder, which is distributed
 --! under the terms of the GNU General Public License version 2.
@@ -49,7 +49,6 @@ architecture rtl of trellis_traceback is
 
 	signal current_node               : unsigned(BW_TRELLIS_STATES - 1 downto 0);
 	signal m_axis_output_tvalid_int   : std_logic;
-	signal s_axis_input_last_tuser_d1 : std_logic;
 	signal s_axis_input_tready_int    : std_logic;
 
 begin
@@ -58,6 +57,7 @@ begin
 	s_axis_input_tready <= s_axis_input_tready_int;
 
 	m_axis_output_tvalid <= m_axis_output_tvalid_int;
+
 
 	-- Traceback the ACS local path decisions and output the resulting global path.
 	pr_traceback : process(clk) is
@@ -68,28 +68,32 @@ begin
 			m_axis_output_tdata        <= '0';
 			m_axis_output_tlast        <= '0';
 			m_axis_output_last_tuser   <= '0';
-			s_axis_input_last_tuser_d1 <= '0';
 			current_node               <= (others => '0');
 		else
-			m_axis_output_tlast   <= s_axis_input_tlast;
-			s_axis_input_last_tuser_d1 <= s_axis_input_last_tuser;
-			m_axis_output_last_tuser <= s_axis_input_last_tuser;
+
+			if m_axis_output_tready = '1' then	
+				m_axis_output_tvalid_int <= '0';
+			end if;
 
 			-- calculate the decoded bit with an shift register
-			if s_axis_input_last_tuser_d1 = '0' then
-				if s_axis_input_tvalid = '1' and s_axis_input_tready_int = '1' then
-					current_node <= current_node(BW_TRELLIS_STATES - 2 downto 0)
-					                & s_axis_input_tdata(to_integer(current_node(BW_TRELLIS_STATES - 1 downto 0)));
+			if s_axis_input_tvalid = '1' and s_axis_input_tready_int = '1' then
+
+				m_axis_output_tlast      <= s_axis_input_tlast;
+				m_axis_output_last_tuser <= s_axis_input_last_tuser;
+
+				-- handle tvalid output signal
+				if s_axis_input_window_tuser = '1' then
+					m_axis_output_tvalid_int <= '1';
 					m_axis_output_tdata <= current_node(BW_TRELLIS_STATES - 1);
 				end if;
-			else
-				current_node <= to_unsigned(0, BW_TRELLIS_STATES);
-			end if;
-			-- handle tvalid output signal
-			if s_axis_input_window_tuser = '1' then
-				m_axis_output_tvalid_int <= '1';
-			else
-				m_axis_output_tvalid_int <= '0';
+
+				-- last value of current window?
+				if s_axis_input_last_tuser = '1' then
+					current_node <= to_unsigned(0, BW_TRELLIS_STATES);
+				else
+					current_node <= current_node(BW_TRELLIS_STATES - 2 downto 0)
+					                & s_axis_input_tdata(to_integer(current_node(BW_TRELLIS_STATES - 1 downto 0)));
+				end if;
 			end if;
 		end if;
 	end if;

@@ -1,5 +1,5 @@
 --!
---! Copyright (C) 2011 - 2012 Creonic GmbH
+--! Copyright (C) 2011 - 2014 Creonic GmbH
 --!
 --! This file is part of the Creonic Viterbi Decoder, which is distributed
 --! under the terms of the GNU General Public License version 2.
@@ -60,7 +60,6 @@ architecture rtl of branch_distance is
 begin
 
 	-- We are ready, when we are allowed to write to the output, or the output is idle.
--- 	s_axis_input_tready_int <= '1' when m_axis_output_tready = '1' or m_axis_output_tvalid_int = '0' else
 	s_axis_input_tready_int <= '1' when m_axis_output_tready = '1' else
 	                           '0';
 
@@ -79,13 +78,19 @@ begin
 			m_axis_output_tdata      <= (others => '0');
 			m_axis_output_tlast      <= '0';
 		else
+
+			if m_axis_output_tvalid_int = '1' and m_axis_output_tready = '1' then
+				m_axis_output_tvalid_int <= '0';
+				m_axis_output_tlast      <= '0';
+			end if;
+
 			if s_axis_input_tready_int = '1' and s_axis_input_tvalid = '1' then
 				v_branch_result := 0;
 
 				for i in NUMBER_PARITY_BITS - 1 downto 0 loop
 
 					--
-					-- Either the value is added or subtrcated, depending on
+					-- Either the value is added or subtracted, depending on
 					-- the current branch metric we are computing.
 					--
 					if EDGE_WEIGHT(i) = '0' then
@@ -95,10 +100,10 @@ begin
 					end if;
 				end loop;
 				m_axis_output_tdata <= std_logic_vector(to_signed(v_branch_result, BW_BRANCH_RESULT));
+				m_axis_output_tvalid_int <= '1';
+				m_axis_output_tlast      <= s_axis_input_tlast;
 			end if;
 
-			m_axis_output_tvalid_int <= s_axis_input_tvalid;
-			m_axis_output_tlast      <= s_axis_input_tlast;
 		end if;
 	end if;
 	end process pr_branch;

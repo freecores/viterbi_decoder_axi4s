@@ -17,6 +17,7 @@ vcom -work dec_viterbi ../packages/pkg_types.vhd
 vcom -work dec_viterbi ../packages/pkg_components.vhd
 vcom -work dec_viterbi ../packages/pkg_trellis.vhd
 vcom -work dec_viterbi ../src/generic_sp_ram.vhd
+vcom -work dec_viterbi ../src/axi4s_buffer.vhd
 vcom -work dec_viterbi ../src/branch_distance.vhd
 vcom -work dec_viterbi ../src/traceback.vhd
 vcom -work dec_viterbi ../src/acs.vhd

@@ -1,5 +1,5 @@
 --!
---! Copyright (C) 2011 - 2012 Creonic GmbH
+--! Copyright (C) 2011 - 2014 Creonic GmbH
 --!
 --! This file is part of the Creonic Viterbi Decoder, which is distributed
 --! under the terms of the GNU General Public License version 2.
@@ -81,6 +81,11 @@ architecture rtl of dec_viterbi is
 	-- split tdata into input array
 	signal input : t_input_block;
 
+	-- buffer signals
+	signal buffer_tdata  : std_logic_vector(31 downto 0);
+	signal buffer_tvalid : std_logic;
+	signal buffer_tlast  : std_logic;
+
 	-- branch signals
 	signal branch_tvalid  : std_logic_vector(NUMBER_BRANCH_UNITS - 1 downto 0);
 	signal branch_tdata   : t_branch;
@@ -108,16 +113,10 @@ architecture rtl of dec_viterbi is
 	signal reorder_tready, reorder_tvalid : std_logic_vector(1 downto 0);
 	signal reorder_tdata, reorder_tlast   : std_logic_vector(1 downto 0);
 	signal reorder_last_tuser             : std_logic_vector(1 downto 0);
-	signal reorder_recursion_tvalid       : std_logic;
-	signal reorder_recursion_tdata        : std_logic;
-	signal reorder_recursion_tlast        : std_logic;
-
-	-- recursion signals
-	signal recursion_tready         : std_logic;
 
 	-- output signals
 	signal output_tready : std_logic_vector(1 downto 0);
-	signal current_active, semaphore_output : integer range 1 downto 0;
+	signal current_active : integer range 1 downto 0;
 
 begin
 
@@ -128,7 +127,7 @@ begin
 	--
 	gen_input_assignment: for i in NUMBER_PARITY_BITS - 1 downto 0 generate
 	begin
-		input(i) <= signed(s_axis_input_tdata(8 * i + BW_LLR_INPUT - 1 downto 8 * i));
+		input(i) <= signed(buffer_tdata(8 * i + BW_LLR_INPUT - 1 downto 8 * i));
 	end generate gen_input_assignment;
 
 	rst <= not aresetn;
@@ -136,6 +135,29 @@ begin
 	------------------------------
 	--- Portmapping components ---
 	------------------------------
+
+	-------------------------------------
+	-- AXI4S input buffer
+	--------------------------------------
+
+	inst_axi4s_buffer: axi4s_buffer
+	generic map(
+		DATA_WIDTH => 32
+	)
+	port map(
+		clk => clk,
+		rst => rst,
+
+		input        => s_axis_input_tdata,
+		input_valid  => s_axis_input_tvalid,
+		input_last   => s_axis_input_tlast,
+		input_accept => s_axis_input_tready,
+
+		output        => buffer_tdata,
+		output_valid  => buffer_tvalid,
+		output_last   => buffer_tlast,
+		output_accept => branch_tready(0)
+	);
 
 	-------------------------------------
 	-- Branch metric unit
@@ -151,9 +173,9 @@ begin
 			clk => clk,
 			rst => rst,
 
-			s_axis_input_tvalid  => s_axis_input_tvalid,
+			s_axis_input_tvalid  => buffer_tvalid,
 			s_axis_input_tdata   => input,
-			s_axis_input_tlast   => s_axis_input_tlast,
+			s_axis_input_tlast   => buffer_tlast,
 			s_axis_input_tready  => branch_tready(i),
 	
 			m_axis_output_tvalid => branch_tvalid(i),
@@ -291,6 +313,10 @@ begin
 	------------------------------
 
 	gen_inst_recursion : if FEEDBACK_POLYNOMIAL /= 0 generate
+		signal reorder_recursion_tvalid : std_logic;
+		signal reorder_recursion_tdata  : std_logic;
+		signal reorder_recursion_tlast  : std_logic;
+		signal recursion_tready         : std_logic;
 	begin
 		inst_recursion : recursion
 		port map(
@@ -307,21 +333,35 @@ begin
 			m_axis_output_tlast      => m_axis_output_tlast,
 			m_axis_output_tready     => m_axis_output_tready
 		);
+
+		-------------------------------
+		-- Output interface handling
+		-------------------------------
+
+		reorder_recursion_tvalid <= '1' when reorder_tvalid(0) = '1' or reorder_tvalid(1) = '1' else
+		                            '0';
+
+		reorder_recursion_tdata  <= reorder_tdata(0) when current_active = 0 else
+		                            reorder_tdata(1);
+
+		reorder_recursion_tlast   <= '1' when reorder_tlast(0) = '1' or reorder_tlast(1) = '1' else
+		                            '0';
+
+		output_tready(0) <= '1' when (current_active = 0) and m_axis_output_tready = '1' else
+		                    '0';
+		output_tready(1) <= '1' when (current_active = 1) and m_axis_output_tready = '1' else
+		                    '0';
 	end generate gen_inst_recursion;
 
-	-------------------------------
-	-- Input interface handling
-	-------------------------------
 
-	s_axis_input_tready <= branch_tready(0);
-
-
-	-------------------------------
-	-- Output interface handling
-	-------------------------------
 
 	no_recursion: if FEEDBACK_POLYNOMIAL = 0 generate
-		m_axis_output_tdata  <= reorder_tdata(0) when reorder_tvalid(0) = '1' else
+
+		-------------------------------
+		-- Output interface handling
+		-------------------------------
+
+		m_axis_output_tdata  <= reorder_tdata(0) when current_active = 0 else
 		                        reorder_tdata(1);
 
 		m_axis_output_tvalid <= '1' when reorder_tvalid(0) = '1' or reorder_tvalid(1) = '1' else
@@ -330,28 +370,15 @@ begin
 		m_axis_output_tlast  <= '1' when reorder_tlast(0) = '1' or reorder_tlast(1) = '1' else
 		                        '0';
 
-		output_tready(0) <= '1' when (semaphore_output = 1 or current_active = 0) and m_axis_output_tready = '1' else
+		output_tready(0) <= '1' when (current_active = 0) and m_axis_output_tready = '1' else
 		                    '0';
-		output_tready(1) <= '1' when (semaphore_output = 1 or current_active = 1) and m_axis_output_tready = '1' else
+		output_tready(1) <= '1' when (current_active = 1) and m_axis_output_tready = '1' else
 		                    '0';
 	end generate no_recursion;
 
 
 	recursion : if FEEDBACK_POLYNOMIAL /= 0 generate
 	begin
-		reorder_recursion_tvalid <= '1' when reorder_tvalid(0) = '1' or reorder_tvalid(1) = '1' else
-		                            '0';
-
-		reorder_recursion_tdata  <= reorder_tdata(0) when reorder_tvalid(0) = '1' else
-		                            reorder_tdata(1);
-
-		reorder_recursion_tlast   <= '1' when reorder_tlast(0) = '1' or reorder_tlast(1) = '1' else
-		                            '0';
-
-		output_tready(0) <= '1' when (semaphore_output = 1 or current_active = 0) and recursion_tready = '1' else
-		                    '0';
-		output_tready(1) <= '1' when (semaphore_output = 1 or current_active = 1) and recursion_tready = '1' else
-		                    '0';
 	end generate recursion;
 
 
@@ -361,20 +388,9 @@ begin
 	if rising_edge(clk) then
 		if rst = '1' then
 			current_active <= 0;
-			semaphore_output <= 1;
 		else
-			if reorder_last_tuser(current_active) = '1' then
-				semaphore_output <= 1;
-			end if;
-			if semaphore_output = 1 then	
-				if reorder_tvalid(0) = '1' then
-					current_active <= 0;
-					semaphore_output <= 0;
-				end if;
-				if reorder_tvalid(1) = '1' then
-					current_active <= 1;
-					semaphore_output <= 0;
-				end if;
+			if reorder_tvalid(current_active) = '1' and m_axis_output_tready = '1' and reorder_last_tuser(current_active) = '1' then
+				current_active <= 1 - current_active;
 			end if;
 		end if;
 	end if;

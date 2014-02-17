@@ -1,5 +1,5 @@
 --!
---! Copyright (C) 2011 - 2012 Creonic GmbH
+--! Copyright (C) 2011 - 2014 Creonic GmbH
 --!
 --! This file is part of the Creonic Viterbi Decoder, which is distributed
 --! under the terms of the GNU General Public License version 2.
@@ -29,12 +29,12 @@ entity tb_dec_viterbi is
 		CLK_PERIOD         : time    := 10 ns;   -- Clock period within simulation.
 
 		BLOCK_LENGTH_START : natural := 200;     -- First block length to simulate.
-		BLOCK_LENGTH_END   : natural := 300;     -- Last block length to simulate.
-		BLOCK_LENGTH_INCR  : integer := 100;       -- Increment from one block length to another.
+		BLOCK_LENGTH_END   : natural := 500;     -- Last block length to simulate.
+		BLOCK_LENGTH_INCR  : integer := 20;       -- Increment from one block length to another.
 
 		SIM_ALL_BLOCKS     : boolean := true;  -- Set to true in order to simulate all blocks within a data file.
-		SIM_BLOCK_START    : natural := 396;      -- If SIM_ALL_BLOCKS = false, gives block to start simulation with.
-		SIM_BLOCK_END      : natural := 398;      -- If SIM_ALL_BLOCKS = false, gives last block of simulation.
+		SIM_BLOCK_START    : natural := 0;      -- If SIM_ALL_BLOCKS = false, gives block to start simulation with.
+		SIM_BLOCK_END      : natural := 10;      -- If SIM_ALL_BLOCKS = false, gives last block of simulation.
 
 		WINDOW_LENGTH      : natural := 55;     -- Window length to use for simulation.
 		ACQUISITION_LENGTH : natural := 50;     -- Acquisition length to use for simulation.
@@ -91,7 +91,7 @@ architecture sim of tb_dec_viterbi is
 	-- Input data send signals.
 	--
 
-	type t_send_data_fsm is (READ_FILE, CONFIGURE, SEND_DATA, SEND_DATA_FINISHED);
+	type t_send_data_fsm is (READ_FILE, CONFIGURE, SEND_DATA, DEASSERT_VALID, SEND_DATA_FINISHED, SEND_FIRST_DATA);
 	signal send_data_fsm : t_send_data_fsm;
 
 	signal block_send_end   : natural;
@@ -115,7 +115,6 @@ architecture sim of tb_dec_viterbi is
 	signal last_block_out             : natural;
 	signal current_block_out          : natural;
 	signal current_block_length_out   : natural;
-	signal current_block_length_out_d : natural;
 	signal sys_bit_counter_out        : natural;
 
 
@@ -130,6 +129,8 @@ architecture sim of tb_dec_viterbi is
 
 	shared variable v_decoded_software : t_nat_array_ptr;
 
+	signal valid_cnt : natural :=0;
+	signal ready_cnt : natural :=0;
 begin
 
 	clk <= not clk after CLK_PERIOD / 2;
@@ -152,8 +153,6 @@ begin
 		variable v_filename_ptr : t_string_ptr;
 		variable v_num_lines    : natural := 0;
 		variable v_num_blocks   : natural := 0;
-		variable v_current_block_length : natural := 0;
-		variable v_sys_bit_counter : integer := 0;
 	begin
 	if rising_edge(clk) then
 		if aresetn = '0' then
@@ -174,6 +173,7 @@ begin
 			sys_bit_counter  <= 0;
 
 			send_data_fsm <= READ_FILE;
+			valid_cnt <= 0;
 
 		else
 
@@ -221,11 +221,20 @@ begin
 					-- Check whether configuration succeeded
 					if m_axis_ctrl_tvalid = '1' and m_axis_ctrl_tready = '1' then
 						m_axis_ctrl_tvalid <= '0';
-						send_data_fsm <= SEND_DATA;
+						send_data_fsm <= SEND_FIRST_DATA;
+
 					else
 						m_axis_ctrl_tvalid <= '1';
 					end if;
 
+				when SEND_FIRST_DATA =>
+					for j in 0 to NUMBER_PARITY_BITS - 1 loop
+						m_axis_input_tdata(j * 8 + BW_LLR_INPUT - 1 downto j * 8) <=
+							 std_logic_vector(to_signed(v_llr(current_block * (current_block_length_tail * NUMBER_PARITY_BITS) + sys_bit_counter * NUMBER_PARITY_BITS + j), BW_LLR_INPUT));
+					end loop;
+					sys_bit_counter <= sys_bit_counter + 1;
+					send_data_fsm <= SEND_DATA;
+					m_axis_input_tvalid <= '1';
 
 				--
 				-- Send all data of a block. If we are done with this, we check what to do next:
@@ -239,34 +248,38 @@ begin
 
 					-- Data transmission => increase bit counter and update data for next cycle.
 					if m_axis_input_tvalid = '1' and m_axis_input_tready = '1' then
-						v_sys_bit_counter := sys_bit_counter + 1;
-						sys_bit_counter   <= v_sys_bit_counter;
-					else
-						v_sys_bit_counter := sys_bit_counter;
+						if valid_cnt = 5 then
+							valid_cnt <= 0;
+							send_data_fsm <= DEASSERT_VALID;
+							m_axis_input_tvalid <= '0';
+						else
+							valid_cnt <= valid_cnt + 1;
+						end if;
+						sys_bit_counter <= sys_bit_counter + 1;
 					end if;
 
 
-					if v_sys_bit_counter < current_block_length_tail then
-						-- trim and move data to stream
-						for j in 0 to NUMBER_PARITY_BITS - 1 loop
-							m_axis_input_tdata(j * 8 + BW_LLR_INPUT - 1 downto j * 8) <=
-								 std_logic_vector(to_signed(v_llr(current_block * (current_block_length_tail * NUMBER_PARITY_BITS) + v_sys_bit_counter * NUMBER_PARITY_BITS + j), BW_LLR_INPUT));
-						end loop;
-					end if;
+					if m_axis_input_tvalid = '1' and m_axis_input_tready = '1' then
+						if sys_bit_counter < current_block_length_tail then
+							-- trim and move data to stream
+							for j in 0 to NUMBER_PARITY_BITS - 1 loop
+								m_axis_input_tdata(j * 8 + BW_LLR_INPUT - 1 downto j * 8) <=
+									 std_logic_vector(to_signed(v_llr(current_block * (current_block_length_tail * NUMBER_PARITY_BITS) + sys_bit_counter * NUMBER_PARITY_BITS + j), BW_LLR_INPUT));
+							end loop;
+						end if;
 
 
-					-- Next data will be last of block
-					if v_sys_bit_counter = current_block_length_tail - 1 then
-						m_axis_input_tlast <= '1';
-					else
-						m_axis_input_tlast <= '0';
+						-- Next data will be last of block
+						if sys_bit_counter = current_block_length_tail - 1 then
+							m_axis_input_tlast <= '1';
+						else
+							m_axis_input_tlast <= '0';
+						end if;
 					end if;
 
 					-- We have just sent the very last bit of this block.
-					if m_axis_input_tvalid = '1' and 
-					   m_axis_input_tready = '1' and 
+					if m_axis_input_tvalid = '1' and m_axis_input_tready = '1' and 
 					   m_axis_input_tlast  = '1' then
---					if v_sys_bit_counter = current_block_length then
 						sys_bit_counter <= 0;
 						m_axis_input_tvalid <= '0';
 
@@ -287,6 +300,8 @@ begin
 						end if;
 					end if;
 
+			when DEASSERT_VALID =>
+				send_data_fsm <= SEND_DATA;
 
 			--
 			-- We are done with all blocks, do nothing anynmore.
@@ -312,20 +327,26 @@ begin
 		if aresetn = '0' then
 
 			current_block_length_out   <= 0;
-			current_block_length_out_d <= 0;
 			sys_bit_counter_out        <= 0;
 			s_axis_output_tready       <= '1';
 			block_receive_complete     <= false;
 			new_block_length           <= false;
+			ready_cnt <= 0;
 
 		else
 
 			block_receive_complete     <= false;
 			new_block_length           <= false;
-			current_block_length_out_d <= current_block_length_out;
+			s_axis_output_tready <= '1';
 
 			-- Data passes the output interface.
 			if s_axis_output_tvalid = '1' and s_axis_output_tready = '1' then
+				if ready_cnt = 8 then
+					ready_cnt <= 0;
+					s_axis_output_tready <= '0';
+				else
+					ready_cnt <= ready_cnt + 1;
+				end if;
 
 				decoded_hardware(sys_bit_counter_out) <= s_axis_output_tdata;
 
@@ -347,7 +368,7 @@ begin
 
 						if SIM_ALL_BLOCKS then
 							first_block_out <= 0;
-							last_block_out  <= v_num_lines / (sys_bit_counter_out + 1);
+							last_block_out  <= v_num_lines / (sys_bit_counter_out + 1) - 1;
 						else
 							first_block_out <= SIM_BLOCK_START;
 							last_block_out  <= SIM_BLOCK_END;
@@ -396,23 +417,24 @@ begin
 						v_bit_error_count := v_bit_error_count + 1;
 
 					   assert false report "Decoded bit " & str(i) & " in block " & str(v_current_block) & " does not match!"
-							severity warning;
+							severity failure;
 					end if;
 				end loop;
 
 				-- Dump message.
 				write(v_line_out, string'("Block length: ")  & str(current_block_length_out));
-				write(v_line_out, string'(", Block: ")       & str(current_block_out));
+				write(v_line_out, string'(", Block: ")       & str(v_current_block));
 				write(v_line_out, string'(", errors: ")      & str(v_bit_error_count));
+				writeline(output, v_line_out);
 
-				if current_block_out /= last_block_out - 1 then
-					current_block_out <= current_block_out + 1;
-				else
+				current_block_out <= current_block_out + 1;
+					
+				if current_block_out = last_block_out then
 					current_block_out <= 0;
 
 					-- Stop simulation, if we are done with all blocks of all block lengths.
 					if current_block_length_out = BLOCK_LENGTH_END then
-						 assert false report "End" severity failure;
+						 assert false report "Simulation finished with no errors." severity failure;
 					end if;
 				end if;
 			end if;

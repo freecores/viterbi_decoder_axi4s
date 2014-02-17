@@ -1,5 +1,5 @@
 --!
---! Copyright (C) 2011 - 2012 Creonic GmbH
+--! Copyright (C) 2011 - 2014 Creonic GmbH
 --!
 --! This file is part of the Creonic Viterbi Decoder, which is distributed
 --! under the terms of the GNU General Public License version 2.
@@ -21,6 +21,26 @@ use dec_viterbi.pkg_param_derived.all;
 use dec_viterbi.pkg_types.all;
 
 package pkg_components is
+
+	component axi4s_buffer is
+		generic (
+			DATA_WIDTH : natural := 1
+		);
+		port (
+		clk            : in  std_logic;
+		rst            : in  std_logic;
+
+		input          : in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+		input_valid    : in  std_logic;
+		input_last     : in  std_logic;
+		input_accept   : out std_logic;
+
+		output         : out std_logic_vector(DATA_WIDTH - 1 downto 0);
+		output_valid   : out std_logic;
+		output_last    : out std_logic;
+		output_accept  : in  std_logic
+		);
+	end component axi4s_buffer;
 
 	component branch_distance is
 		generic(
